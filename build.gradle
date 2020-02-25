@@ -20,6 +20,15 @@ allprojects {
     repositories {
         google()
         jcenter()
+
+        maven {
+            url "https://maven.pkg.github.com/Health-V2-Consortium/DexCareSDK-Android/"
+
+            credentials {
+                username System.getenv("DEXCARE_MAVEN_ACCOUNT")
+                password System.getenv("DEXCARE_MAVEN_TOKEN")
+            }
+        }
     }
 }
 
@@ -30,7 +39,7 @@ ext {
 
     androidxAnnotationVersion = '1.1.0'
     androidxAppCompatVersion = '1.1.0'
-    androidxFragmentVersion = '1.0.0'
+    androidxFragmentVersion = '1.2.0'
 
     rxJavaVersion = '3.0.0'
 
