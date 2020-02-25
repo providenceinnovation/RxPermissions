@@ -12,12 +12,19 @@ To use this library your `minSdkVersion` must be >= 11.
 allprojects {
     repositories {
         ...
-        maven { url 'https://jitpack.io' }
+        maven {
+            url "https://maven.pkg.github.com/Health-V2-Consortium/DexCareSDK-Android/"
+
+            credentials {
+                username "githubUserName"
+                password "githubToken"
+            }
+        }
     }
 }
 
 dependencies {
-    implementation 'com.github.tbruyelle:rxpermissions:0.10.2'
+    implementation 'org.dexcare:rxpermissions:1.0.0'
 }
 ```
 
