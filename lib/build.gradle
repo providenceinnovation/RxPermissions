@@ -1,13 +1,23 @@
 apply plugin: 'com.android.library'
-apply from: 'jitpack.gradle'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-kapt'
+apply plugin: 'maven-publish'
+
+def dexCareGroupID = "org.dexcare"
+def dexCareArtifactID = "rxpermissions"
+def dexCareVersion = "1.0.0"
 
 android {
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    compileSdkVersion appCompileSdkVersion
 
     defaultConfig {
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdkVersion appMinSdkVersion
+        targetSdkVersion appTargetSdkVersion
+        versionCode 1
+        versionName dexCareVersion
     }
+    
     buildTypes {
         release {
             minifyEnabled false
@@ -25,17 +35,101 @@ android {
 }
 
 dependencies {
-    implementation rootProject.ext.rxJava
-    implementation rootProject.ext.supportAnnotations
-    implementation rootProject.ext.supportFragment
+    implementation "io.reactivex.rxjava3:rxjava:$rxJavaVersion"
 
-    testImplementation rootProject.ext.junit
-    testImplementation rootProject.ext.mockito
-    testImplementation rootProject.ext.robolectric
-    testImplementation rootProject.ext.robolectricShadowsSupport
-    testImplementation rootProject.ext.khronosOpenGLApi
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.annotation:annotation:$androidxAnnotationVersion"
+    implementation "androidx.fragment:fragment:$androidxFragmentVersion"
+
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.mockito:mockito-core:1.10.19'
+    testImplementation "org.robolectric:robolectric:$robolectricVersion"
+    testImplementation "org.robolectric:shadows-support-v4:$robolectricVersion"
+
+    // Workaround for https://github.com/robolectric/robolectric/issues/1932
+    testImplementation "org.khronos:opengl-api:gl1.1-android-2.1_r1"
 }
 
-// Commented to use JitPack instead of bintray
-//apply from: 'install.gradle'
-//apply from: 'bintray.gradle'
+
+repositories {
+    mavenCentral()
+}
+
+task androidJavadocs(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+}
+
+task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {
+    archiveClassifier.set("javadoc")
+    from androidJavadocs.destinationDir
+}
+
+task androidSourcesJar(type: Jar) {
+    archiveClassifier.set("sources")
+    from android.sourceSets.main.java.srcDirs
+}
+
+project.afterEvaluate {
+    //https://stackoverflow.com/a/39252262/2523932
+    //https://stackoverflow.com/a/42160584
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                groupId dexCareGroupID
+                artifactId dexCareArtifactID
+                version dexCareVersion
+
+                artifact bundleReleaseAar
+
+                pom.withXml {
+                    def dependenciesNode = asNode().appendNode('dependencies')
+
+                    // List all compile dependencies and write to POM
+                    // With update to gradle, 3.0.0 each configurations should be added by it's name.
+                    configurations.api.getDependencies().each { Dependency dep ->
+                        addDependenciesToPom(dependenciesNode, dep)
+                    }
+
+                    configurations.implementation.getDependencies().each { Dependency dep ->
+                        addDependenciesToPom(dependenciesNode, dep)
+                    }
+                }
+            }
+        }
+
+        repositories {
+            maven {
+                url = uri("https://maven.pkg.github.com/Health-V2-Consortium/DexCareSDK-Android")
+                credentials {
+                    username = System.getenv("DEXCARE_MAVEN_ACCOUNT")
+                    password = System.getenv("DEXCARE_MAVEN_TOKEN")
+                }
+            }
+        }
+    }
+}
+
+def addDependenciesToPom(def dependenciesNode, Dependency dep) {
+    if (dep.group == null || dep.version == null || dep.name == null || dep.name == "unspecified")
+        return // ignore invalid dependencies
+
+    final dependencyNode = dependenciesNode.appendNode('dependency')
+    dependencyNode.appendNode('groupId', dep.group)
+    dependencyNode.appendNode('artifactId', dep.name)
+    dependencyNode.appendNode('version', dep.version)
+
+    if (!dep.transitive) {
+        // If this dependency is transitive, we should force exclude all its dependencies from the POM
+        final exclusionNode = dependencyNode.appendNode('exclusions').appendNode('exclusion')
+        exclusionNode.appendNode('groupId', '*')
+        exclusionNode.appendNode('artifactId', '*')
+    } else if (!dep.properties.excludeRules.empty) {
+        // Otherwise add specified exclude rules
+        final exclusionNode = dependencyNode.appendNode('exclusions').appendNode('exclusion')
+        dep.properties.excludeRules.each { ExcludeRule rule ->
+            exclusionNode.appendNode('groupId', rule.group ?: '*')
+            exclusionNode.appendNode('artifactId', rule.module ?: '*')
+        }
+    }
+}
